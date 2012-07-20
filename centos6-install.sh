@@ -147,7 +147,6 @@ mysql <<"EOF"
 CREATE DATABASE dashboard_production CHARACTER SET utf8;
 CREATE USER 'dashboard'@'localhost' IDENTIFIED BY 'this.is.the.very.secure.password.for.dashboard';
 GRANT ALL PRIVILEGES ON dashboard_production.* TO 'dashboard'@'localhost';
-GRANT SELECT ON dashboard_production.* TO 'monitoring'@'%';
 FLUSH PRIVILEGES;
 EOF
 
