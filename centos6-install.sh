@@ -3,12 +3,79 @@
 # Poor man's error management :)
 set -e
 
+RPM_PACKAGES=""
+
+# General
+RPM_PACKAGES="${RPM_PACKAGES} httpd"
+RPM_PACKAGES="${RPM_PACKAGES} mod_ssl"
+RPM_PACKAGES="${RPM_PACKAGES} mysql-server"
+RPM_PACKAGES="${RPM_PACKAGES} mod_passenger"
+
+# Puppet
+RPM_PACKAGES="${RPM_PACKAGES} puppet-server"
+RPM_PACKAGES="${RPM_PACKAGES} puppet-dashboard" # Optional
+
+# Foreman - (un)comment as needed
+RPM_PACKAGES="${RPM_PACKAGES} foreman"
+RPM_PACKAGES="${RPM_PACKAGES} foreman-cli"
+RPM_PACKAGES="${RPM_PACKAGES} foreman-console"
+RPM_PACKAGES="${RPM_PACKAGES} foreman-ec2"
+RPM_PACKAGES="${RPM_PACKAGES} foreman-fog"
+RPM_PACKAGES="${RPM_PACKAGES} foreman-libvirt"
+
+# We use rubygem-mysql2. See: 
+# http://stackoverflow.com/questions/5411551/what-the-difference-between-mysql-and-mysql2-gem
+#RPM_PACKAGES="${RPM_PACKAGES} foreman-mysql"
+RPM_PACKAGES="${RPM_PACKAGES} foreman-mysql2"
+
+#RPM_PACKAGES="${RPM_PACKAGES} foreman-ovirt"
+#RPM_PACKAGES="${RPM_PACKAGES} foreman-postgresql"
+RPM_PACKAGES="${RPM_PACKAGES} foreman-proxy"
+#RPM_PACKAGES="${RPM_PACKAGES} foreman-sqlite"
+# Obsoletted by libvirt above
+#RPM_PACKAGES="${RPM_PACKAGES} foreman-virt"
+RPM_PACKAGES="${RPM_PACKAGES} foreman-vmware"
+
+
+YUM_REPOS=""
+YUM_REPOS="${YUM_REPOS} http://yum.puppetlabs.com/el/6/products/x86_64/puppetlabs-release-6-1.noarch.rpm"
+YUM_REPOS="${YUM_REPOS} http://passenger.stealthymonkeys.com/rhel/6/passenger-release.noarch.rpm"
+YUM_REPOS="${YUM_REPOS} http://mirror.us.leaseweb.net/epel/6/x86_64/epel-release-6-5.noarch.rpm"
+YUM_REPOS="${YUM_REPOS} http://yum.theforeman.org/stable/RPMS/foreman-release-1-1.noarch.rpm"
+#YUM_REPOS="${YUM_REPOS} http://yum.theforeman.org/development/el6/x86_64/foreman-release-1.0.0-0.7.el6.noarch.rpm"
+
+
+
+#
+# Packages
+#
+function set_repos() {
+  test -z ${YUM_REPOS} || yum install -y ${YUM_REPOS}
+
+  cat > /etc/yum.repos.d/vmware-tools.repo <<"EOF"
+[vmware-tools]
+name=VMware Tools for Red Hat Enterprise Linux $releasever - $basearch
+baseurl=http://packages.vmware.com/tools/esx/4.1latest/rhel$releasever/$basearch
+enabled=1
+gpgcheck=1
+gpgkey=http://packages.vmware.com/tools/VMWARE-PACKAGING-GPG-KEY.pub
+
+EOF
+
+}
+
+function set_packages() {
+  test -z "${RPM_PACKAGES}" || yum install -y ${RPM_PACKAGES}
+}
+
 
 #
 # Environment
 #
 
-cat > /etc/profile.d/ftc.sh <<"EOF"
+function set_profile() {
+
+  cat > /etc/profile.d/ftc.sh <<"EOF"
 alias ll="ls -al"
 alias vi="vim"
 alias h="history"
@@ -27,43 +94,70 @@ export EDITOR=vim
 
 EOF
 
-# cat > /etc/profile.d/proxy.sh <<"EOF"
-# export http_proxy=10.28.105.210:1234
-# export https_proxy=$http_proxy
-# export ftp_proxy=$http_proxy
-# export HTTP_PROXY=$http_proxy
-# export HTTPS_PROXY=$http_proxy
-# export FTP_PROXY=$http_proxy
-# EOF
+  source /etc/profile
+}
 
-echo 'export RAILS_ENV=production' > /etc/profile.d/rails.sh 
+function set_proxy() {
+  cat > /etc/profile.d/proxy.sh <<"EOF"
+export http_proxy=10.28.105.210:1234
+export https_proxy=$http_proxy
+export ftp_proxy=$http_proxy
+export HTTP_PROXY=$http_proxy
+export HTTPS_PROXY=$http_proxy
+export FTP_PROXY=$http_proxy
+EOF
 
-. /etc/profile
+  source /etc/profile
+}
+
+function set_rails_env() {
+
+  echo 'export RAILS_ENV=production' > /etc/profile.d/rails.sh 
+
+  source /etc/profile
+}
 
 #
-# Packages
+# mySQL
 #
+function setup_mysql() {
 
-yum -y install http://yum.puppetlabs.com/el/6/products/x86_64/puppetlabs-release-6-1.noarch.rpm http://passenger.stealthymonkeys.com/rhel/6/passenger-release.noarch.rpm http://mirror.us.leaseweb.net/epel/6/x86_64/epel-release-6-5.noarch.rpm
-yum -y install httpd mod_ssl mod_passenger puppet-server puppet-dashboard mysql-server
+  service mysqld start
+  chkconfig mysqld on
+
+  mysql <<"EOF"
+CREATE DATABASE IF NOT EXISTS dashboard_production CHARACTER SET utf8;
+GRANT ALL PRIVILEGES ON dashboard_production.* TO 'dashboard'@'localhost' IDENTIFIED BY 'this.is.a.not.very.secure.password.for.dashboard';
+CREATE DATABASE IF NOT EXISTS puppet CHARACTER SET utf8;
+GRANT ALL PRIVILEGES ON puppet.* TO 'puppet'@'localhost' IDENTIFIED BY 'this.is.a.not.very.secure.password.for.puppet';
+FLUSH PRIVILEGES;
+EOF
+}
+
 
 #
 # Apache
 #
+function configure_apache() {
 
-echo 'HTTPD=/usr/sbin/httpd.worker' >> /etc/sysconfig/httpd
+  # Remove the annoying default vhost
+  test -f /etc/httpd/conf.d/welcome.conf && rm -f /etc/httpd/conf.d/welcome.conf
+  # Remove the default SSL vhost
+  sed -i '/^Listen/d; /<VirtualHost/,/<\/VirtualHost/d' /etc/httpd/conf.d/ssl.conf
 
-sed -i -re '
-s:^ServerTokens.*:ServerTokens Prod:
-s:^User.*:User puppet:
-s:^Group.*:Group puppet:
-s:^ServerSignature.*:ServerSignature Off:' /etc/httpd/conf/httpd.conf 
+  echo 'HTTPD=/usr/sbin/httpd.worker' >> /etc/sysconfig/httpd
 
-grep -qF 'Include vhosts.d/*.conf' /etc/httpd/conf/httpd.conf || echo 'Include vhosts.d/*.conf' >> /etc/httpd/conf/httpd.conf 
+  sed -i -re '
+  s:^ServerTokens.*:ServerTokens Prod:
+  s:^User.*:User puppet:
+  s:^Group.*:Group puppet:
+  s:^ServerSignature.*:ServerSignature Off:' /etc/httpd/conf/httpd.conf 
 
-mkdir -p /etc/httpd/vhosts.d
+  grep -qF 'Include vhosts.d/*.conf' /etc/httpd/conf/httpd.conf || echo 'Include vhosts.d/*.conf' >> /etc/httpd/conf/httpd.conf 
 
-cat </etc/httpd/99_mod_passenger.conf <<EOF
+  mkdir -p /etc/httpd/vhosts.d
+
+  cat >/etc/httpd/conf.d/99_mod_passenger.conf <<EOF
 PassengerPoolIdleTime 300
 PassengerMaxPoolSize 15
 PassengerMaxRequests 10000
@@ -73,7 +167,17 @@ PassengerHighPerformance on
 # ex: set et ts=4 sw=4 ft=apache:
 EOF
 
-cat > /etc/httpd/vhosts.d/puppet-master.conf <<EOF
+  service httpd start
+  chkconfig httpd on
+
+}
+
+function puppet_vhost() {
+
+  mkdir -p /usr/share/puppet/rack/puppetmasterd{,/public,/tmp}
+  ln -sfn  /usr/share/puppet/ext/rack/files/config.ru /usr/share/puppet/rack/puppetmasterd/config.ru 
+
+  cat > /etc/httpd/vhosts.d/puppet-master.conf <<EOF
 Listen 8140
 <VirtualHost *:8140>
     SSLEngine on
@@ -105,10 +209,10 @@ Listen 8140
 
 # ex: set et ts=4 sw=4 ft=apache:
 EOF
+}
 
-
-
-cat > /etc/httpd/vhosts.d/puppet-dashboard.conf <<EOF
+function dashboard_vhost() {
+  cat > /etc/httpd/vhosts.d/puppet-dashboard.conf <<EOF
 <VirtualHost *:80>
     RackAutoDetect On
     DocumentRoot /usr/share/puppet-dashboard/public/
@@ -126,60 +230,9 @@ cat > /etc/httpd/vhosts.d/puppet-dashboard.conf <<EOF
 
 # ex: set et ts=4 sw=4 ft=apache:
 EOF
+}
 
-
-#
-# Puppet
-#
-
-service puppetmaster start; service puppetmaster stop
-mkdir -p /usr/share/puppet/rack/puppetmasterd{,/public,/tmp}
-ln -sfn  /usr/share/puppet/ext/rack/files/config.ru /usr/share/puppet/rack/puppetmasterd/config.ru 
-
-
-#
-# mySQL
-#
-
-service mysqld start
-chkconfig mysqld on
-mysql <<"EOF"
-CREATE DATABASE dashboard_production CHARACTER SET utf8;
-CREATE USER 'dashboard'@'localhost' IDENTIFIED BY 'this.is.the.very.secure.password.for.dashboard';
-GRANT ALL PRIVILEGES ON dashboard_production.* TO 'dashboard'@'localhost';
-FLUSH PRIVILEGES;
-EOF
-
-#
-# Dashboard
-#
-
-cd /usr/share/puppet-dashboard/
-sed -i -re 's/  password:.*/  password: this.is.the.very.secure.password.for.dashboard/' /usr/share/puppet-dashboard/config/database.yml
-rake db:migrate
-chmod -R ug+rwX /usr/share/puppet* /var/lib/puppet/ /var/log/puppet/
-chmod -R ug+rwX /usr/share/puppet* /var/lib/puppet/ /var/log/puppet/
-chown -R puppet:puppet /usr/share/puppet/ /var/lib/puppet/ /var/log/puppet/
-chown -R puppet-dashboard:puppet-dashboard /usr/share/puppet-dashboard/
-
-service httpd start
-chkconfig httpd on
-
-
-cat >>~/.vimrc <<EOF
-set modeline
-highlight Comment ctermfg=Green
-EOF
-
-
-
-exit 0
-
-yum -y install http://yum.theforeman.org/stable/RPMS/foreman-release-1-1.noarch.rpm
-yum -y install foreman foreman-proxy
-
-
-
+function foreman_vhost() {
 cat > /etc/httpd/vhosts.d/foreman.conf <<EOF
 Listen 3000
 <VirtualHost *:3000>
@@ -199,7 +252,84 @@ Listen 3000
 
 # ex: set et ts=4 sw=4 ft=apache:
 EOF
+}
 
+#
+# Puppet CA
+#
+
+function init_puppet_ca() {
+  # Just start & stop the stand alone puppet master
+  # If the CA/SSL don't exist yet, it will create them
+  service puppetmaster start; service puppetmaster stop
+}
+
+#
+# Dashboard
+#
+
+function config_foreman() {
+
+  cat > /etc/foreman/database.yml <<EOF
+production:
+  adapter: mysql
+  database: puppet
+  username: puppet
+  password: this.is.a.not.very.secure.password.for.puppet
+  host: localhost
+  socket: "/var/lib/mysql/mysql.sock"
+EOF
+
+  su - foreman -s /bin/bash -c /usr/share/foreman/extras/dbmigrate
+}
+
+function init_dashboard_db() {
+
+  cd /usr/share/puppet-dashboard/
+  sed -i -re 's/  password:.*/  password: this.is.a.not.very.secure.password.for.dashboard/' /usr/share/puppet-dashboard/config/database.yml
+  rake db:migrate
+}
+
+function fix_perms() {
+  chmod -R ug+rwX /usr/share/puppet* /var/lib/puppet/ /var/log/puppet/
+  chown -R puppet:puppet /usr/share/puppet/ /var/lib/puppet/ /var/log/puppet/
+  chown -R puppet-dashboard:puppet-dashboard /usr/share/puppet-dashboard/
+}
+
+function config_dashboard() {
+  grep -q ^time_zone /usr/share/puppet-dashboard/config/settings.yml || echo "time_zone: 'London'" >> /usr/share/puppet-dashboard/config/settings.yml
+  sed -i -re "
+    s/^enable_inventory_service:.*/enable_inventory_service: true/;
+    s/^inventory_server:.*/inventory_server: 'localhost'/;
+    s/^use_file_bucket_diffs:.*/use_file_bucket_diffs: true/;
+    s/^file_bucket_server:.*/file_bucket_server: 'localhost'/;
+    s/^use_external_node_classification:.*/use_external_node_classification: false/;
+    s/^enable_read_only_mode:.*/enable_read_only_mode: true/;
+    s/^time_zone:.*/time_zone: 'London'/;
+  " /usr/share/puppet-dashboard/config/settings.yml
+}
+
+
+#set_profile
+#set_proxy
+#set_rails_env
+
+#set_repos
+#set_packages
+
+#setup_mysql
+#configure_apache
+
+#puppet_vhost
+#dashboard_vhost
+#foreman_vhost
+#init_dashboard_db
+#init_puppet_ca
+config_dashboard
+config_foreman
+
+
+exit 0
 
 cat >/usr/lib/ruby/site_ruby/1.8/puppet/reports/foreman.rb <"EOF"
 # copy this file to your report dir - e.g. /usr/lib/ruby/1.8/puppet/reports/
@@ -234,16 +364,4 @@ Puppet::Reports.register_report(:foreman) do
     end
 end
 EOF
-
-
-cat > /etc/yum.repos.d/vmware-tools.repo <<"EOF"
-[vmware-tools]
-name=VMware Tools for Red Hat Enterprise Linux $releasever - $basearch
-baseurl=http://packages.vmware.com/tools/esx/4.1latest/rhel$releasever/$basearch
-enabled=1
-gpgcheck=1
-gpgkey=http://packages.vmware.com/tools/VMWARE-PACKAGING-GPG-KEY.pub
-
-EOF
-
 
