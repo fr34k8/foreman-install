@@ -41,8 +41,8 @@ YUM_REPOS=""
 YUM_REPOS="${YUM_REPOS} http://yum.puppetlabs.com/el/6/products/x86_64/puppetlabs-release-6-1.noarch.rpm"
 YUM_REPOS="${YUM_REPOS} http://passenger.stealthymonkeys.com/rhel/6/passenger-release.noarch.rpm"
 YUM_REPOS="${YUM_REPOS} http://mirror.us.leaseweb.net/epel/6/x86_64/epel-release-6-5.noarch.rpm"
-YUM_REPOS="${YUM_REPOS} http://yum.theforeman.org/stable/RPMS/foreman-release-1-1.noarch.rpm"
-#YUM_REPOS="${YUM_REPOS} http://yum.theforeman.org/development/el6/x86_64/foreman-release-1.0.0-0.7.el6.noarch.rpm"
+#YUM_REPOS="${YUM_REPOS} http://yum.theforeman.org/stable/RPMS/foreman-release-1-1.noarch.rpm"
+YUM_REPOS="${YUM_REPOS} http://yum.theforeman.org/development/el6/x86_64/foreman-release-1.0.0-0.7.el6.noarch.rpm"
 
 
 
@@ -64,7 +64,7 @@ EOF
 
 }
 
-function set_packages() {
+function install_packages() {
   test -z "${RPM_PACKAGES}" || yum install -y ${RPM_PACKAGES}
 }
 
@@ -312,19 +312,19 @@ function config_dashboard() {
 
 #set_profile
 #set_proxy
-#set_rails_env
+set_rails_env
 
-#set_repos
-#set_packages
+set_repos
+install_packages
 
-#setup_mysql
-#configure_apache
+setup_mysql
+configure_apache
 
-#puppet_vhost
-#dashboard_vhost
-#foreman_vhost
-#init_dashboard_db
-#init_puppet_ca
+puppet_vhost
+dashboard_vhost
+foreman_vhost
+init_dashboard_db
+init_puppet_ca
 config_dashboard
 config_foreman
 
