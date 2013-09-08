@@ -20,8 +20,8 @@ RPM_PACKAGES="${RPM_PACKAGES} foreman"
 RPM_PACKAGES="${RPM_PACKAGES} foreman-cli"
 RPM_PACKAGES="${RPM_PACKAGES} foreman-console"
 RPM_PACKAGES="${RPM_PACKAGES} foreman-ec2"
-RPM_PACKAGES="${RPM_PACKAGES} foreman-fog"
-RPM_PACKAGES="${RPM_PACKAGES} foreman-libvirt"
+#RPM_PACKAGES="${RPM_PACKAGES} foreman-fog"
+#RPM_PACKAGES="${RPM_PACKAGES} foreman-libvirt"
 
 # We use rubygem-mysql2. See: 
 # http://stackoverflow.com/questions/5411551/what-the-difference-between-mysql-and-mysql2-gem
@@ -41,8 +41,7 @@ YUM_REPOS=""
 YUM_REPOS="${YUM_REPOS} http://yum.puppetlabs.com/el/6/products/x86_64/puppetlabs-release-6-1.noarch.rpm"
 YUM_REPOS="${YUM_REPOS} http://passenger.stealthymonkeys.com/rhel/6/passenger-release.noarch.rpm"
 YUM_REPOS="${YUM_REPOS} http://mirror.us.leaseweb.net/epel/6/x86_64/epel-release-6-5.noarch.rpm"
-#YUM_REPOS="${YUM_REPOS} http://yum.theforeman.org/stable/RPMS/foreman-release-1-1.noarch.rpm"
-YUM_REPOS="${YUM_REPOS} http://yum.theforeman.org/development/el6/x86_64/foreman-release-1.0.0-0.7.el6.noarch.rpm"
+YUM_REPOS="${YUM_REPOS} http://yum.theforeman.org/releases/1.0/el6/x86_64/foreman-release-1.0.2-1.el6.noarch.rpm"
 
 
 
@@ -50,7 +49,7 @@ YUM_REPOS="${YUM_REPOS} http://yum.theforeman.org/development/el6/x86_64/foreman
 # Packages
 #
 function set_repos() {
-  test -z ${YUM_REPOS} || yum install -y ${YUM_REPOS}
+  test -z "${YUM_REPOS}" || yum install -y ${YUM_REPOS}
 
   cat > /etc/yum.repos.d/vmware-tools.repo <<"EOF"
 [vmware-tools]
@@ -314,7 +313,7 @@ function config_dashboard() {
 #set_proxy
 set_rails_env
 
-set_repos
+#set_repos
 install_packages
 
 setup_mysql
