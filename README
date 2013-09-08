@@ -1,3 +1,4 @@
 Kickstart file and quick & dirty script to install puppet,
 dashboard and foreman (WIP).
 
+*WARNING:* The kickstart config installs my public keys. You might want to remove that bit if you use this stuff.

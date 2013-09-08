@@ -41,8 +41,7 @@ YUM_REPOS=""
 YUM_REPOS="${YUM_REPOS} http://yum.puppetlabs.com/el/6/products/x86_64/puppetlabs-release-6-1.noarch.rpm"
 YUM_REPOS="${YUM_REPOS} http://passenger.stealthymonkeys.com/rhel/6/passenger-release.noarch.rpm"
 YUM_REPOS="${YUM_REPOS} http://mirror.us.leaseweb.net/epel/6/x86_64/epel-release-6-5.noarch.rpm"
-YUM_REPOS="${YUM_REPOS} http://yum.theforeman.org/releases/1.0/el6/x86_64/foreman-release-1.0.2-1.el6.noarch.rpm"
-
+YUM_REPOS="${YUM_REPOS} http://yum.theforeman.org/releases/latest/el6/x86_64/foreman-release.rpm"
 
 
 #
